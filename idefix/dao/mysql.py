@@ -7,8 +7,8 @@ from __future__ import unicode_literals
 __author__ = "d01"
 __copyright__ = "Copyright (C) 2015-17, Florian JUNG"
 __license__ = "All rights reserved"
-__version__ = "0.2.0"
-__date__ = "2017-11-30"
+__version__ = "0.2.1"
+__date__ = "2017-12-07"
 # Created: 2015-03-13 12:34
 
 import datetime
@@ -22,6 +22,7 @@ from ..errors import DAOException, AlreadyExistsException, ValueException
 
 
 class SqlConnector(Loadable, StartStopable):
+    """ Connect to mysql database """
 
     def __init__(self, settings=None):
         if settings is None:
@@ -248,7 +249,7 @@ class SqlConnector(Loadable, StartStopable):
                 " created DATETIME NOT NULL," \
                 " updated DATETIME NOT NULL," \
                 " name VARCHAR(255) NOT NULL UNIQUE," \
-                " latest_chapter DECIMAL " \
+                " latest_chapter DECIMAL(8,2) " \
                 ") DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci;"
 
         try:
@@ -282,7 +283,7 @@ class SqlConnector(Loadable, StartStopable):
             " manga_uuid BINARY(16) NOT NULL," \
             " created DATETIME NOT NULL," \
             " updated DATETIME NOT NULL," \
-            " chapter DECIMAL," \
+            " chapter DECIMAL(8,2)," \
             " CONSTRAINT mangas_read_pk PRIMARY KEY (user_uuid, manga_uuid)," \
             " CONSTRAINT mangas_read_user_fk FOREIGN KEY (user_uuid)" \
             "   REFERENCES users (uuid) ON DELETE CASCADE," \

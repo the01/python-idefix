@@ -15,12 +15,14 @@ __date__ = "2017-12-01"
 import logging
 import logging.config
 import argparse
+import datetime
 
 from flotils import get_logger
 from flotils.logable import default_logging_config
 from requests.compat import urlparse
 
 from .controller import IDFXManga
+from .model import Manga
 
 
 logger = get_logger()
@@ -64,12 +66,19 @@ def setup_parser():
     )
     parser.add_argument(
         "-r", "--read", nargs="?", const="", default=None,
-        help="Run a show update; Default: all - check for all shows or "
-             "specify a show"
+        help="Mark all as read / specific"
     )
     parser.add_argument(
         "--sync", action="store_true",
         help="Sync with database"
+    )
+    parser.add_argument(
+        "--setup", action="store_true",
+        help="Setup database database"
+    )
+    parser.add_argument(
+        "--add", nargs="?", default=None,
+        help="Add manga"
     )
 
     return parser
@@ -124,7 +133,16 @@ def main():
     user, mangas = instance.load_manga_file(path=args.manga_file)
     new = None
     dirty = False
-
+    if args.add:
+        n = Manga(name=args.add)
+        found = [m for m in mangas if n.name.lower() == m.name.lower()]
+        if found:
+            logger.info("Manga already added ({})".format(found[0].name))
+        else:
+            n.updated = datetime.datetime.utcnow()
+            n.created = datetime.datetime.utcnow()
+            mangas.append(n)
+            dirty = True
     if args.check:
         new = instance.check(mangas, instance.create_index())
         # logger.debug(new)
@@ -136,7 +154,10 @@ def main():
         if new is None:
             new = instance.check(mangas, instance.create_index())
         if new:
+            r = args.read.lower()
             for m in mangas:
+                if r and not m.name.lower().startswith(r):
+                    continue
                 for n in new:
                     if not((n.name or m.name)
                            and n.name.lower() == m.name.lower()):
@@ -149,8 +170,13 @@ def main():
                     logger.info("Read " + format_mangas([m]))
         else:
             logger.info("Nothing read")
+    if args.setup:
+        if not instance.dao._is_running:
+            instance.dao.start(False)
+        instance.dao.setup()
     if args.sync:
-        instance.dao.start(False)
+        if not instance.dao._is_running:
+            instance.dao.start(False)
         db_mangas = instance.dao.read_get(user)
         db_dict = {db.name.lower(): db for db in db_mangas}
         file_dict ={m.name.lower(): m for m in mangas}
@@ -175,9 +201,6 @@ def main():
             if not m.name:
                 m.name = d.name
                 dirty = True
-            #logger.debug("--")
-            #logger.debug(d.updated)
-            #logger.debug(m.updated)
             if d.updated < m.updated:
                 # m newer
                 d.name = m.name
@@ -200,6 +223,8 @@ def main():
         if missing_db:
             logger.debug("Missing from db:\n" + format_mangas(missing_db))
             for d in missing_db:
+                if not d.uuid:
+                    dirty = True
                 instance.create_manga(user, d)
         if upd_db:
             logger.debug("Update in db:\n" + format_mangas(upd_db))
@@ -215,4 +240,3 @@ def main():
     if dirty:
         logger.debug("Dirty")
         instance.save_manga_file(user, mangas, readable=True)
-        pass

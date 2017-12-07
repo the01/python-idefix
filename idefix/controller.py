@@ -9,7 +9,7 @@ __email__ = "jungflor@gmail.com"
 __copyright__ = "Copyright (C) 2013-17, Florian JUNG"
 __license__ = "MIT"
 __version__ = "0.2.0"
-__date__ = "2017-11-27"
+__date__ = "2017-07-12"
 # Created: 2013-08-04 24:00
 
 import threading
@@ -18,7 +18,6 @@ import multiprocessing.pool
 import os
 import datetime
 
-from flotils.runable import StartStopable
 from flotils.loadable import Loadable, save_file, load_file
 from floscraper.webscraper import WebScraper, WEBConnectException
 from requests.compat import urljoin
@@ -162,7 +161,7 @@ class IDFXManga(Loadable):
             raise ValueException("Invalid manga")
         if not manga.uuid:
             # Is unknown manga?
-            mangas = self.dao.manga_get(manga)
+            mangas = self.dao.manga_get(Manga(name=manga.name))
             if not mangas:
                 # Create new manga
                 self.info("Creating new manga: {}".format(manga.name))
@@ -170,14 +169,12 @@ class IDFXManga(Loadable):
                     raise DAOException("Manga not created")
                 mangas = self.dao.manga_get(manga)
             if not mangas:
-                raise ValueException("Manga not created")
+                raise ValueException("Manga not found")
             if len(mangas) > 1:
                 return mangas
             manga.uuid = mangas[0].uuid
-            if not manga.created:
-                manga.created = mangas[0].created
-            if not manga.updated:
-                manga.updated = mangas[0].updated
+            manga.created = mangas[0].created
+            manga.updated = mangas[0].updated
         res = self.dao.read_create(user, manga)
         if not res:
             raise DAOException("Manga read not created")
@@ -265,16 +262,19 @@ class IDFXManga(Loadable):
                         "Failed to load scrapper {}".format(scraper)
                     )
                     continue
-            scraper.cache.duration = 999999
         results = self.pool.map(self._do_scrap, self.scrapers)
         index = {}
         """ :type : dict[str | unicode, idefix.model.Manga] """
         for result in results:
+            if not result:
+                # Skip no mangas/errors
+                continue
             for key, value in result.items():
                 index.setdefault(
                     key, Manga(name=value['name'], chapter=value['chapter'])
                 )
                 m = index[key]
+                m.updated = datetime.datetime.utcnow()
                 if m.chapter and m.chapter == value['chapter']:
                     m.urls.append(value['url'])
                 if not m.chapter or m.chapter < value['chapter']:
@@ -301,6 +301,5 @@ class IDFXManga(Loadable):
             w = web_mangas[m.name.lower()]
             if m.chapter < w.chapter:
                 w.uuid = m.uuid
-                w.updated = datetime.datetime.utcnow()
                 res.append(w)
         return res
