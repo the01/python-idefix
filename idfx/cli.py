@@ -190,34 +190,42 @@ def main():
             d = db_dict[key]
             m = file_dict[key]
             if not m.uuid:
+                logger.debug("{} -> {}".format(d.uuid, m.uuid))
                 m.uuid = d.uuid
                 dirty = True
             if not m.created:
+                logger.debug("{} -> {}".format(d.created, m.created))
                 m.created = d.created
                 dirty = True
             if not m.updated:
+                logger.debug("{} -> {}".format(d.updated, m.updated))
                 m.updated = d.updated
                 dirty = True
             if not m.name:
+                logger.debug("{} -> {}".format(d.name, m.name))
                 m.name = d.name
                 dirty = True
             if d.updated < m.updated:
                 # m newer
+                logger.debug("{} -> {}".format(m, d))
                 d.name = m.name
                 d.chapter = m.chapter
                 d.updated = m.updated
                 upd_db.append(d)
             elif d.updated > m.updated:
                 # d newer
+                logger.debug("{} -> {}".format(d, m))
                 m.name = d.name
                 m.chapter = d.chapter
                 m.updated = d.updated
                 dirty = True
             elif d.chapter != m.chapter:
                 if m.chapter is None or m.chapter < d.chapter:
+                    logger.debug("{} -> {}".format(d.chapter, m.chapter))
                     m.chapter = d.chapter
                     dirty = True
                 elif d.chapter is None or d.chapter < m.chapter:
+                    logger.debug("{} -> {}".format(m.chapter, d.chapter))
                     d.chapter = m.chapter
                     upd_db.append(d)
         if missing_db:

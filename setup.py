@@ -30,7 +30,7 @@ def get_version():
     """
     Parse the version information from the init file
     """
-    version_file = os.path.join("idefix", "__init__.py")
+    version_file = os.path.join("idfx", "__init__.py")
     initfile_lines = open(version_file, "rt").readlines()
     version_reg = r"^__version__ = ['\"]([^'\"]*)['\"]"
     for line in initfile_lines:
@@ -76,7 +76,7 @@ assert pypi is not None
 assert external is not None
 
 setup(
-    name="idefix",
+    name="idfx",
     version=version,
     description="Manga chapter checker",
     long_description=readme + "\n\n" + history,
@@ -84,14 +84,14 @@ setup(
     author_email="jungflor@gmail.com",
     url="https://github.com/the01/python-idefix",
     packages=[
-        "idefix",
-        "idefix.dao"
+        "idfx",
+        "idfx.dao"
     ],
     install_requires=pypi,
     dependency_links=external,
     entry_points={
         'console_scripts': [
-            "idefix=idefix.cli:main",
+            "idefix=idfx.cli:main",
         ]
     },
     license="MIT License",
