@@ -8,10 +8,11 @@ __author__ = "d01"
 __email__ = "jungflor@gmail.com"
 __copyright__ = "Copyright (C) 2017, Florian JUNG"
 __license__ = "MIT"
-__version__ = "0.5.0"
-__date__ = "2017-12-01"
+__version__ = "0.5.1"
+__date__ = "2017-12-15"
 # Created: 2017-11-27 21:08
 
 from .controller import IDFXManga
+from .model import Manga, User
 
-__all__ = ["IDFXManga"]
+__all__ = ["IDFXManga", "Manga", "User"]

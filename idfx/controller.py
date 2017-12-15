@@ -8,8 +8,8 @@ __author__ = "d01"
 __email__ = "jungflor@gmail.com"
 __copyright__ = "Copyright (C) 2013-17, Florian JUNG"
 __license__ = "MIT"
-__version__ = "0.2.0"
-__date__ = "2017-07-12"
+__version__ = "0.2.1"
+__date__ = "2017-07-15"
 # Created: 2013-08-04 24:00
 
 import threading
@@ -53,11 +53,27 @@ class IDFXManga(Loadable):
         else:
             self.warning("No DAO")
         self.scrapers = settings.get('scrapers', None)
-        pool_size = settings.get('pool_size', multiprocessing.cpu_count())
+        self._threading_mode = None
+        self.pool = None
+        self.pool_size = settings.get('pool_size', multiprocessing.cpu_count())
+        self.threading_mode = settings.get('threading_mode', None)
 
-        self.pool = multiprocessing.pool.ThreadPool(
-            processes=pool_size
-        )
+    @property
+    def threading_mode(self):
+        return self._threading_mode
+
+    @threading_mode.setter
+    def threading_mode(self, value):
+        if self._threading_mode == value:
+            return
+        if self.pool:
+            # TODO: stop
+            self.pool = None
+        if value == "pool":
+            self.pool = multiprocessing.pool.ThreadPool(
+                processes=self.pool_size
+            )
+        self._threading_mode = value
 
     def load_manga_file(self, user=None, path=None):
         """
@@ -262,7 +278,28 @@ class IDFXManga(Loadable):
                         "Failed to load scrapper {}".format(scraper)
                     )
                     continue
-        results = self.pool.map(self._do_scrap, self.scrapers)
+        if self.threading_mode == "pool" and self.pool:
+            self.debug("pool")
+            results = self.pool.map(self._do_scrap, self.scrapers)
+        elif self.threading_mode == "threaded":
+            self.debug("threaded")
+            results = []
+
+            def fn(scraper):
+                results.append(self._do_scrap(scraper))
+
+            threads = [
+                threading.Thread(target=fn, args=(scraper,))
+                for scraper in self.scrapers
+            ]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        else:
+            # Not threaded
+            self.debug("sequential")
+            results = [self._do_scrap(scraper) for scraper in self.scrapers]
         index = {}
         """ :type : dict[str | unicode, idefix.model.Manga] """
         for result in results:
