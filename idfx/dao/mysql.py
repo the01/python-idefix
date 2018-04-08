@@ -776,6 +776,41 @@ class SqlConnector(Loadable, StartStopable):
             raise DAOException(e)
         return mangas
 
+    def read_get_index(self):
+        """
+        Get mangas linked to users reading them
+
+        :return: Manga - user/chapter correlation
+        :rtype: list[(idefix.model.Manga, list[(str | unicode, int)]]
+        """
+        mangas = []
+        try:
+            affected = self.execute(
+                "SELECT"
+                " UuidFromBin(m.uuid),m.name,"
+                " mr.chapter,UuidFromBin(mr.user_uuid) "
+                "FROM mangas_read mr JOIN mangas m ON mr.manga_uuid = m.uuid "
+                "ORDER BY m.uuid"
+            )
+            if affected:
+                res = self.fetchall()
+                for t in res:
+                    if not mangas or mangas[-1][0].uuid != t[0]:
+                        mangas.append((
+                            Manga(uuid=t[0], name=t[1]), []
+                        ))
+                    mangas[-1][1].append((t[3], float(t[2])))
+        except DAOException:
+            raise
+        except Exception as e:
+            raise DAOException(e)
+        # sanity check
+        mids = [m.uuid for m, _ in mangas]
+        smids = set(mids)
+        if len(mids) != len(smids):
+            self.error("Got double entries {}-{}".format(len(mids), len(smids)))
+        return mangas
+
     def start(self, blocking=False):
         self.debug("()")
         try:

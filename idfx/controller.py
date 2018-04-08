@@ -340,3 +340,27 @@ class IDFXManga(Loadable):
                 w.uuid = m.uuid
                 res.append(w)
         return res
+
+    def check_multiple(self, user_mangas, web_mangas):
+        """
+
+        :param user_mangas: Manga -> all users and latest chapters read
+        :type user_mangas: list[(idefix.model.Manga, list[(str | unicode, int)]]
+        :param web_mangas: Mangas that are available on the web
+        :type web_mangas: dict[str | unicode, idefix.model.Manga]
+        :return:
+        :rtype: dict[str | unicode, list[idefix.model.Manga]]
+        """
+        res = {}
+        for manga, uuidChapter in user_mangas:
+            if manga.name.lower() not in web_mangas:
+                # No update for this manga
+                continue
+            w = web_mangas[manga.name.lower()]
+            w.uuid = manga.uuid
+            for uuid, chapter in uuidChapter:
+                if uuid not in res:
+                    res[uuid] = []
+                if chapter < w.chapter:
+                    res[uuid].append(w)
+        return res
