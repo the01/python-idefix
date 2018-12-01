@@ -230,15 +230,28 @@ class IDFXManga(Loadable):
             number = name = link = ""
             # if value == list -> assumes correct one at index 0
             for val in a:
+                if val == "number":
+                    # Handle multiple chapters separatly
+                    continue
                 if isinstance(a[val], list) and len(a[val]) > 0:
                     a[val] = a[val][0]
 
             if "number" in a:
-                try:
-                    number = float("{}".format(a['number']).strip())
-                except:
-                    # Not a number -> skip
-                    pass
+                numbers = a['number']
+                if not isinstance(numbers, list):
+                    numbers = [numbers]
+                number = -1
+
+                for n in numbers:
+                    try:
+                        num_candidate = float("{}".format(n).strip())
+                        if num_candidate > number:
+                            number = num_candidate
+                    except:
+                        # Not a number -> skip
+                        pass
+                if number == -1:
+                    number = ""
             if not number:
                 # No number -> skip
                 continue
