@@ -210,7 +210,7 @@ class IDFXManga(Loadable):
         except WEBConnectException as e:
             self.error("{}".format(e))
             return None
-        except:
+        except Exception:
             self.exception("Failed to scrap")
             return None #raise?
 
@@ -226,8 +226,10 @@ class IDFXManga(Loadable):
             return None
 
         mangas = {}
+
         for a in res.scraped['chapter']:
             number = name = link = ""
+
             # if value == list -> assumes correct one at index 0
             for val in a:
                 if val == "number":
@@ -247,11 +249,13 @@ class IDFXManga(Loadable):
                         num_candidate = float("{}".format(n).strip())
                         if num_candidate > number:
                             number = num_candidate
-                    except:
+                    except Exception:
                         # Not a number -> skip
                         pass
+
                 if number == -1:
                     number = ""
+
             if not number:
                 # No number -> skip
                 continue
@@ -286,11 +290,12 @@ class IDFXManga(Loadable):
                     }
                     scraper = WebScraper(sett)
                     self.scrapers[i] = scraper
-                except:
+                except Exception:
                     self.exception(
                         "Failed to load scrapper {}".format(scraper)
                     )
                     continue
+
         if self.threading_mode == "pool" and self.pool:
             self.debug("pool")
             results = self.pool.map(self._do_scrap, self.scrapers)
@@ -312,19 +317,26 @@ class IDFXManga(Loadable):
         else:
             # Not threaded
             self.debug("sequential")
-            results = [self._do_scrap(scraper) for scraper in self.scrapers]
+            results = [
+                self._do_scrap(scraper)
+                for scraper in self.scrapers
+            ]
+
         index = {}
         """ :type : dict[str | unicode, idefix.model.Manga] """
+
         for result in results:
             if not result:
                 # Skip no mangas/errors
                 continue
+
             for key, value in result.items():
                 index.setdefault(
                     key, Manga(name=value['name'], chapter=value['chapter'])
                 )
                 m = index[key]
                 m.updated = datetime.datetime.utcnow()
+
                 if m.chapter and m.chapter == value['chapter']:
                     m.urls.append(value['url'])
                 if not m.chapter or m.chapter < value['chapter']:
@@ -344,11 +356,14 @@ class IDFXManga(Loadable):
         :rtype: list[idefix.model.Manga]
         """
         res = []
+
         for m in user_mangas:
             if m.name.lower() not in web_mangas:
                 # No update for this manga
                 continue
+
             w = web_mangas[m.name.lower()]
+
             if m.chapter < w.chapter:
                 w.uuid = m.uuid
                 res.append(w)
@@ -365,12 +380,15 @@ class IDFXManga(Loadable):
         :rtype: dict[str | unicode, list[idefix.model.Manga]]
         """
         res = {}
+
         for manga, uuidChapter in user_mangas:
             if manga.name.lower() not in web_mangas:
                 # No update for this manga
                 continue
+
             w = web_mangas[manga.name.lower()]
             w.uuid = manga.uuid
+
             for uuid, chapter in uuidChapter:
                 if uuid not in res:
                     res[uuid] = []
