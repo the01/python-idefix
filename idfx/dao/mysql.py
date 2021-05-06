@@ -1,48 +1,43 @@
 # -*- coding: UTF-8 -*-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
 
 __author__ = "d01"
-__copyright__ = "Copyright (C) 2015-17, Florian JUNG"
+__copyright__ = "Copyright (C) 2015-21, Florian JUNG"
 __license__ = "All rights reserved"
-__version__ = "0.2.1"
-__date__ = "2017-12-07"
+__version__ = "0.3.0"
+__date__ = "2021-05-06"
 # Created: 2015-03-13 12:34
 
 import datetime
 import uuid
+from typing import Optional, Dict, Tuple, Any
 
-import pymysql
 from flotils import Loadable, StartStopable, StartException
+import pymysql
 
-from ..model import Manga, User
 from ..errors import DAOException, AlreadyExistsException, ValueException
+from ..model import Manga, User
 
 
 class SqlConnector(Loadable, StartStopable):
     """ Connect to mysql database """
 
-    def __init__(self, settings=None):
+    def __init__(self, settings: Optional[Dict[str, Any]] = None):
         if settings is None:
             settings = {}
-        super(SqlConnector, self).__init__(settings)
+
+        super().__init__(settings)
         self._server = settings['server']
         self._default_db = settings['database']
         self._user = settings['user']
         self._pw = settings['password']
-        self.connection = None
-        """ Current connection
-            :type : pymysql.Connection """
-        self.cursor = None
-        """ Current cursor
-            :type : None | pymysql.cursors.Cursor """
-        self._dbs = {}
-        """ :type : dict[str | unicode, (pymysql.Connection, pymysql.cursors.Cursor)] """
-        self.database = None
-        """ Current database
-            :type : None | str | unicode """
+        self.connection: Optional[pymysql.Connection] = None
+        """ Current connection """
+        self.cursor: Optional[pymysql.cursors.Cursor] = None
+        """ Current cursor """
+        self._dbs: Dict[str, Tuple[pymysql.Connection, pymysql.cursors.Cursor]] = {}
+        """ """
+        self.database: Optional[str] = None
+        """ Current database """
 
     def _connect(self, db=None, encoding="utf8"):
         """
@@ -57,6 +52,7 @@ class SqlConnector(Loadable, StartStopable):
         """
         if not db:
             db = self._default_db
+
         try:
             con = pymysql.connect(
                 host=self._server,
@@ -70,6 +66,7 @@ class SqlConnector(Loadable, StartStopable):
         except Exception as e:
             self.exception("Failed to connect")
             raise DAOException(e)
+
         self._dbs[db] = (con, cur)
         self.database = db
         self.connection = con
@@ -87,7 +84,7 @@ class SqlConnector(Loadable, StartStopable):
         if db:
             dbs = [db]
         else:
-            dbs = self._dbs.keys()
+            dbs = list(self._dbs.keys())
 
         for db in dbs:
             con, cur = self._dbs[db]
@@ -98,7 +95,7 @@ class SqlConnector(Loadable, StartStopable):
                 if con:
                     con.commit()
                     con.close()
-            except:
+            except Exception:
                 self.exception("Failed to close")
             finally:
                 del self._dbs[db]
@@ -238,9 +235,10 @@ class SqlConnector(Loadable, StartStopable):
 
         try:
             res = self.execute(query)
+
             if res:
                 self.info("Created functions")
-        except:
+        except Exception:
             self.exception("Failed to create functions")
             raise DAOException('Functions failed')
 
@@ -254,9 +252,10 @@ class SqlConnector(Loadable, StartStopable):
 
         try:
             res = self.execute(query)
+
             if res:
                 self.info("Created table mangas")
-        except:
+        except Exception:
             self.exception("Failed to create table mangas")
             raise DAOException('Table create failed')
 
@@ -272,9 +271,10 @@ class SqlConnector(Loadable, StartStopable):
 
         try:
             res = self.execute(query)
+
             if res:
                 self.info("Created table users")
-        except:
+        except Exception:
             self.exception("Failed to create table users")
             raise DAOException('Table create failed')
 
@@ -294,9 +294,10 @@ class SqlConnector(Loadable, StartStopable):
 
         try:
             res = self.execute(query)
+
             if res:
                 self.info("Created table mangas_read")
-        except:
+        except Exception:
             self.exception("Failed to create table mangas_read")
             raise DAOException('Table create failed')
 
@@ -318,6 +319,7 @@ class SqlConnector(Loadable, StartStopable):
             manga.updated = manga.created
         if not manga.uuid:
             manga.uuid = "{}".format(uuid.uuid4())
+
         try:
             affected = self.execute(
                 "INSERT INTO mangas ("
@@ -330,6 +332,7 @@ class SqlConnector(Loadable, StartStopable):
                 )
             )
             # self.debug(affected)
+
             return affected
         except DAOException as e:
             if e.args[0] and e.args[0].args and e.args[0].args[0] == 1062:
@@ -353,20 +356,24 @@ class SqlConnector(Loadable, StartStopable):
             raise ValueException("Invalid manga")
         if not manga.updated:
             manga.updated = datetime.datetime.utcnow()
+
         query = "UPDATE mangas SET updated=%s"
         args = (manga.updated,)
+
         if manga.name is not None:
             query += ",name=%s"
             args += (manga.name,)
         if manga.latest_chapter is not None:
             query += ",latest_chapter=%s"
             args += (manga.latest_chapter,)
+
         try:
             affected = self.execute(
                 query + " WHERE UuidFromBin(uuid)=%s",
                 args + (manga.uuid,)
             )
             # self.debug(affected)
+
             return affected
         except DAOException as e:
             if e.args[0] and e.args[0].args and e.args[0].args[0] == 1062:
@@ -388,12 +395,14 @@ class SqlConnector(Loadable, StartStopable):
         """
         if not manga or not manga.uuid:
             raise ValueException("Invalid manga")
+
         try:
             affected = self.execute(
                 "DELETE FROM mangas WHERE UuidFromBin(uuid)=%s",
                 (manga.uuid,)
             )
             # self.debug(affected)
+
             return affected
         except DAOException:
             raise
@@ -415,6 +424,7 @@ class SqlConnector(Loadable, StartStopable):
         args = ()
         where_query = ""
         where_query_parts = []
+
         if manga:
             if manga.name:
                 op = "LIKE" if use_like else "="
@@ -428,19 +438,24 @@ class SqlConnector(Loadable, StartStopable):
                 ["{} {} %s".format(t[0], t[1]) for t in where_query_parts]
             )
             args = tuple([t[2] for t in where_query_parts])
+
         mangas = []
+
         try:
             affected = self.execute(
                 "SELECT"
                 " UuidFromBin(uuid),created,updated,name,latest_chapter "
                 "FROM mangas" + where_query
-                , args)
+                , args
+            )
             # self.debug(affected)
+
             if affected:
                 res = self.fetchall()
+
                 for t in res:
                     mangas.append(Manga(
-                        uuid=t[0], name=t[3]
+                        uuid=t[0].decode("utf-8"), name=t[3]
                     ))
                     mangas[-1].created = t[1]
                     mangas[-1].updated = t[2]
@@ -469,6 +484,7 @@ class SqlConnector(Loadable, StartStopable):
             user.updated = user.created
         if not user.uuid:
             user.uuid = "{}".format(uuid.uuid4())
+
         try:
             affected = self.execute(
                 "INSERT INTO users ("
@@ -481,6 +497,7 @@ class SqlConnector(Loadable, StartStopable):
                 )
             )
             # self.debug(affected)
+
             return affected
         except DAOException as e:
             if e.args[0] and e.args[0].args and e.args[0].args[0] == 1062:
@@ -504,20 +521,24 @@ class SqlConnector(Loadable, StartStopable):
             raise ValueException("Invalid user")
         if not user.updated:
             user.updated = datetime.datetime.utcnow()
+
         query = "UPDATE users SET updated=%s"
         args = (user.updated,)
+
         if user.firstname is not None:
             query += ",firstname=%s"
             args += (user.firstname,)
         if user.lastname is not None:
             query += ",lastname=%s"
             args += (user.lastname,)
+
         try:
             affected = self.execute(
                 query + " WHERE UuidFromBin(uuid)=%s",
                 args + (user.uuid,)
             )
             # self.debug(affected)
+
             return affected
         except DAOException as e:
             if e.args[0] and e.args[0].args and e.args[0].args[0] == 1062:
@@ -539,12 +560,14 @@ class SqlConnector(Loadable, StartStopable):
         """
         if not user or not user.uuid:
             raise ValueException("Invalid user")
+
         try:
             affected = self.execute(
                 "DELETE FROM users WHERE UuidFromBin(uuid)=%s",
                 (user.uuid,)
             )
             # self.debug(affected)
+
             return affected
         except DAOException:
             raise
@@ -566,6 +589,7 @@ class SqlConnector(Loadable, StartStopable):
         args = ()
         where_query = ""
         where_query_parts = []
+
         if user:
             if user.firstname:
                 op = "LIKE" if use_like else "="
@@ -586,7 +610,9 @@ class SqlConnector(Loadable, StartStopable):
                 ["{} {} %s".format(t[0], t[1]) for t in where_query_parts]
             )
             args = tuple([t[2] for t in where_query_parts])
+
         users = []
+
         try:
             affected = self.execute(
                 "SELECT"
@@ -594,11 +620,13 @@ class SqlConnector(Loadable, StartStopable):
                 "FROM users" + where_query
                 , args)
             # self.debug(affected)
+
             if affected:
                 res = self.fetchall()
+
                 for t in res:
                     users.append(User(
-                        uuid=t[0], firstname=t[3], lastname=t[4]
+                        uuid=str(t[0]), firstname=t[3], lastname=t[4]
                     ))
                     users[-1].created = t[1]
                     users[-1].updated = t[2]
@@ -607,6 +635,7 @@ class SqlConnector(Loadable, StartStopable):
             raise
         except Exception as e:
             raise DAOException(e)
+
         return users
 
     def read_create(self, user, manga):
@@ -625,14 +654,19 @@ class SqlConnector(Loadable, StartStopable):
             raise ValueException("Invalid user")
         if not manga or not manga.uuid:
             raise ValueException("Invalid manga")
+
         chapter = 0
+
         if manga.chapter:
             chapter = manga.chapter
+
         now = datetime.datetime.utcnow()
+
         if not manga.created:
             manga.created = now
         if not manga.updated:
             manga.updated = now
+
         try:
             affected = self.execute(
                 "INSERT INTO mangas_read ("
@@ -642,6 +676,7 @@ class SqlConnector(Loadable, StartStopable):
                 (user.uuid, manga.uuid, manga.created, manga.updated, chapter)
             )
             # self.debug(affected)
+
             return affected
         except DAOException as e:
             if e.args[0] and e.args[0].args and e.args[0].args[0] == 1062:
@@ -667,7 +702,9 @@ class SqlConnector(Loadable, StartStopable):
             raise ValueException("Invalid user")
         if not manga or not manga.uuid or manga.chapter is None:
             raise ValueException("Invalid manga")
+
         now = datetime.datetime.utcnow()
+
         try:
             affected = self.execute(
                 "UPDATE mangas_read SET updated=%s,chapter=%s"
@@ -676,6 +713,7 @@ class SqlConnector(Loadable, StartStopable):
                 (now, manga.chapter, user.uuid, manga.uuid)
             )
             # self.debug(affected)
+
             return affected
         except DAOException as e:
             if e.args[0] and e.args[0].args and e.args[0].args[0] == 1062:
@@ -701,6 +739,7 @@ class SqlConnector(Loadable, StartStopable):
             raise ValueException("Invalid user")
         if not manga or not manga.uuid:
             raise ValueException("Invalid manga")
+
         try:
             affected = self.execute(
                 "DELETE FROM mangas_read"
@@ -731,9 +770,11 @@ class SqlConnector(Loadable, StartStopable):
         """
         if not user or not user.uuid:
             raise ValueException("Invalid user")
+
         args = (user.uuid,)
         where_query = " WHERE UuidFromBin(user_uuid)=%s"
         where_query_parts = []
+
         if manga:
             if manga.name:
                 op = "LIKE" if use_like else "="
@@ -751,7 +792,9 @@ class SqlConnector(Loadable, StartStopable):
                 ["{} {} %s".format(t[0], t[1]) for t in where_query_parts]
             )
             args += tuple([t[2] for t in where_query_parts])
+
         mangas = []
+
         try:
             affected = self.execute(
                 "SELECT"
@@ -761,11 +804,13 @@ class SqlConnector(Loadable, StartStopable):
                 + where_query
                 , args)
             # self.debug(affected)
+
             if affected:
                 res = self.fetchall()
+
                 for t in res:
                     mangas.append(Manga(
-                        uuid=t[0], name=t[1], chapter=float(t[5])
+                        uuid=t[0].decode("utf-8"), name=t[1], chapter=float(t[5])
                     ))
                     mangas[-1].created = t[3]
                     mangas[-1].updated = t[4]
@@ -774,6 +819,7 @@ class SqlConnector(Loadable, StartStopable):
             raise
         except Exception as e:
             raise DAOException(e)
+
         return mangas
 
     def read_get_index(self):
@@ -792,38 +838,48 @@ class SqlConnector(Loadable, StartStopable):
                 "FROM mangas_read mr JOIN mangas m ON mr.manga_uuid = m.uuid "
                 "ORDER BY m.uuid"
             )
+
             if affected:
                 res = self.fetchall()
+
                 for t in res:
                     if not mangas or mangas[-1][0].uuid != t[0]:
                         mangas.append((
-                            Manga(uuid=t[0], name=t[1]), []
+                            Manga(uuid=t[0].decode("utf-8"), name=t[1]), []
                         ))
+
                     mangas[-1][1].append((t[3], float(t[2])))
         except DAOException:
             raise
         except Exception as e:
             raise DAOException(e)
+
         # sanity check
         mids = [m.uuid for m, _ in mangas]
         smids = set(mids)
+
         if len(mids) != len(smids):
             self.error("Got double entries {}-{}".format(len(mids), len(smids)))
+
         return mangas
 
     def start(self, blocking=False):
         self.debug("()")
+
         try:
             self._connect()
-        except:
+        except Exception:
             # self.exception("Failed to connect")
             raise StartException("Connecting failed")
-        super(SqlConnector, self).start(blocking)
+
+        super().start(blocking)
 
     def stop(self):
         self.debug("()")
+
         try:
             self._close()
-        except:
+        except Exception:
             self.exception("Failed to close")
-        super(SqlConnector, self).stop()
+
+        super().stop()

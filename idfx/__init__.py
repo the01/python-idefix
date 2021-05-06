@@ -1,17 +1,14 @@
 # -*- coding: UTF-8 -*-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
 
 __author__ = "d01"
 __email__ = "jungflor@gmail.com"
-__copyright__ = "Copyright (C) 2017, Florian JUNG"
+__copyright__ = "Copyright (C) 2017-21, Florian JUNG"
 __license__ = "MIT"
-__version__ = "0.5.4"
-__date__ = "2018-12-01"
+
+__date__ = "2021-05-06"
 # Created: 2017-11-27 21:08
 
+from .__version__ import __version__
 from .controller import IDFXManga
 from .model import Manga, User
 

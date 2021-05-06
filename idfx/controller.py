@@ -1,15 +1,11 @@
 # -*- coding: UTF-8 -*-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
 
 __author__ = "d01"
 __email__ = "jungflor@gmail.com"
-__copyright__ = "Copyright (C) 2013-17, Florian JUNG"
+__copyright__ = "Copyright (C) 2013-21, Florian JUNG"
 __license__ = "MIT"
-__version__ = "0.2.1"
-__date__ = "2017-07-15"
+__version__ = "0.3.0"
+__date__ = "2021-05-06"
 # Created: 2013-08-04 24:00
 
 import threading
@@ -21,7 +17,6 @@ import datetime
 from flotils.loadable import Loadable, save_file, load_file
 from floscraper.webscraper import WebScraper, WEBConnectException
 from requests.compat import urljoin
-from dateutil.tz import tzutc
 
 from .model import Manga, User
 from .dao.mysql import SqlConnector
@@ -30,8 +25,10 @@ from .errors import AlreadyExistsException, DAOException, ValueException,\
 
 
 def to_utc(dt):
-    dt = dt.astimezone(tzutc())
-    return dt.replace(tzinfo=None)
+    if dt.tzinfo:
+        dt = (dt - dt.tzinfo.utcoffset(dt)).replace(tzinfo=None)
+
+    return dt
 
 
 class IDFXManga(Loadable):
@@ -89,11 +86,15 @@ class IDFXManga(Loadable):
         """
         if not path:
             path = self._read_path
+
         if not path:
             path = ""
+
         user_id = None
+
         if user:
             user_id = user.uuid
+
             if not user_id:
                 user_id = "{}_{}".format(user.lastname, user.firstname)
 
@@ -102,6 +103,7 @@ class IDFXManga(Loadable):
 
         if not os.path.isfile(path):
             self.error("File not found {}".format(path))
+
             raise IOError("File not found {}".format(path))
 
         try:
@@ -111,11 +113,14 @@ class IDFXManga(Loadable):
         except Exception as e:
             self.exception("Failed to load manga file")
             raise IOError(e)
+
         if "user" not in loaded:
             raise ValueException("User missing")
         if "mangas" not in loaded:
             raise ValueException("Mangas missing")
+
         mangas = []
+
         for mdict in loaded['mangas']:
             m = Manga.from_dict(mdict)
             """ :type : idefix.model.Manga """
@@ -145,8 +150,10 @@ class IDFXManga(Loadable):
         if not path:
             path = ""
         user_id = user.uuid
+
         if not user_id:
             user_id = "{}_{}".format(user.lastname, user.firstname)
+
         temp_path = os.path.join(path, "idfx_manga_{}.json".format(user_id))
 
         if os.path.exists(os.path.basename(temp_path)):
