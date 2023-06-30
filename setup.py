@@ -14,8 +14,15 @@ import sys
 import os
 
 
-if sys.argv[-1] == "build":
-    os.system("python setup.py clean sdist bdist bdist_egg bdist_wheel")
+# Package meta-data.
+NAME = "idfx"
+DESCRIPTION = ""
+URL = "https://github.com/the01/python-idefix"
+EMAIL = "jungflor@gmail.com"
+AUTHOR = "Florian Jung"
+REQUIRES_PYTHON = ">=3.8"
+VERSION = None
+LICENSE = "MIT"
 
 
 def get_version():
@@ -62,6 +69,19 @@ history = get_file("HISTORY.rst")
 pypi, external = split_external_requirements(
     get_file("requirements.txt").split("\n")
 )
+
+if sys.argv[-1] == "build":
+    quit(os.system("python setup.py clean bdist_wheel sdist --formats=gztar,zip"))
+elif sys.argv[-1] == "version":
+    # print(about.get('__version__'))
+    print(get_version())
+
+    quit(0)
+elif sys.argv[-1] == "name":
+    print(NAME)
+
+    quit(0)
+
 
 assert version is not None
 assert readme is not None
