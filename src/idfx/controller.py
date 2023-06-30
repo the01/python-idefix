@@ -2,67 +2,99 @@
 
 __author__ = "d01"
 __email__ = "jungflor@gmail.com"
-__copyright__ = "Copyright (C) 2013-21, Florian JUNG"
+__copyright__ = "Copyright (C) 2013-23, Florian JUNG"
 __license__ = "MIT"
 __version__ = "0.3.0"
-__date__ = "2021-05-06"
+__date__ = "2023-06-21"
 # Created: 2013-08-04 24:00
 
-import threading
+import datetime
 import multiprocessing
 import multiprocessing.pool
 import os
-import datetime
+import threading
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
-from flotils.loadable import Loadable, save_file, load_file
-from floscraper.webscraper import WebScraper, WEBConnectException
+from floscraper.webscraper import WEBConnectException, WebScraper
+from flotils import StartException, StartStopable
+from flotils.loadable import load_file, Loadable, save_file
 from requests.compat import urljoin
 
-from .model import Manga, User
 from .dao.mysql import SqlConnector
-from .errors import AlreadyExistsException, DAOException, ValueException,\
-    NoDAOException, IDFXException
+from .errors import DAOException, IDFXException, ValueException
+from .model import Manga, User
+
+ThreadingMode = Literal["pool", "threaded"]
+""" Available threading modes """
 
 
-def to_utc(dt):
-    if dt.tzinfo:
-        dt = (dt - dt.tzinfo.utcoffset(dt)).replace(tzinfo=None)
+def to_utc(dt: datetime.datetime) -> datetime.datetime:
+    """ Transform to naive utc """
+    if dt.tzinfo is not None:
+        diff = dt.tzinfo.utcoffset(dt)
+
+        if diff is not None:
+            dt = (dt - diff).replace(tzinfo=None)
 
     return dt
 
 
-class IDFXManga(Loadable):
+class IDFXManga(Loadable, StartStopable):
     """ Class for retrieving manga info """
 
-    def __init__(self, settings=None):
+    def __init__(self, settings: Optional[Dict[str, Any]] = None) -> None:
+        """ Constructor """
         if settings is None:
             settings = {}
-        super(IDFXManga, self).__init__(settings)
 
-        self._read_path = self.join_path_prefix(
+        super().__init__(settings)
+
+        self._read_path: Optional[str] = self.join_path_prefix(
             settings.get('manga_path', None)
         )
+        self.dao: Optional[SqlConnector] = None
 
-        self.dao = None
-        """ :type : None | idefix.dao.mysql.SqlConnector """
         if 'dao' in settings:
             self.dao = SqlConnector(settings['dao'])
         else:
             self.warning("No DAO")
-        self.scrapers = settings.get('scrapers', None)
-        self._threading_mode = None
+
+        self.scrapers: List[WebScraper] = self._load_scrapers(
+            settings.get('scrapers', [])
+        )
+        self._threading_mode: Optional[ThreadingMode] = None
         self.pool = None
-        self.pool_size = settings.get('pool_size', multiprocessing.cpu_count())
-        self.threading_mode = settings.get('threading_mode', None)
+        self.pool_size: int = settings.get('pool_size', multiprocessing.cpu_count())
+        self.threading_mode: Optional[ThreadingMode] = settings.get(
+            'threading_mode', None
+        )
+
+    def _load_scrapers(self, mixed: List[Union[str, WebScraper]]) -> List[WebScraper]:
+        res = []
+
+        for mix in mixed:
+            if isinstance(mix, str):
+                sett = {
+                    'path_prefix': self._pre_path,
+                    'settings_file': mix
+                }
+                mix = WebScraper(sett)
+
+            res.append(mix)
+
+        return res
 
     @property
-    def threading_mode(self):
+    def threading_mode(self) -> Optional[ThreadingMode]:
+        """ Threading mode in use """
         return self._threading_mode
 
     @threading_mode.setter
-    def threading_mode(self, value):
+    def threading_mode(self, value: Optional[ThreadingMode]) -> None:
+        """ Set threading_mode and setup """
         if self._threading_mode == value:
             return
+
         if self.pool:
             # TODO: stop
             self.pool = None
@@ -72,17 +104,18 @@ class IDFXManga(Loadable):
             )
         self._threading_mode = value
 
-    def load_manga_file(self, user=None, path=None):
+    def load_manga_file(
+            self, user: Optional[User] = None, path: Optional[str] = None
+    ) -> Tuple[User, List[Manga]]:
         """
         Load manga list from file
         Either using exact path or user and base path
 
         :param user: User to load for
-        :type user: None | idefix.model.User
         :param path: Base path / exact path to load from
-        :type path: None | str | unicode
         :return: Loaded user, mangas
-        :rtype: idefix.model.Idefix, list[idefix.model.Manga]
+        :raises ValueException: No user/manga data
+        :raises IOError: Loading manga file failed
         """
         if not path:
             path = self._read_path
@@ -90,21 +123,21 @@ class IDFXManga(Loadable):
         if not path:
             path = ""
 
-        user_id = None
+        user_id: Optional[str] = None
 
         if user:
             user_id = user.uuid
 
             if not user_id:
-                user_id = "{}_{}".format(user.lastname, user.firstname)
+                user_id = f"{user.lastname}_{user.firstname}"
 
         if not path or not os.path.isfile(path):
-            path = os.path.join(path, "idfx_manga_{}.yaml".format(user_id))
+            path = os.path.join(path, f"idfx_manga_{user_id}.yaml")
 
         if not os.path.isfile(path):
-            self.error("File not found {}".format(path))
+            self.error(f"File not found {path}")
 
-            raise IOError("File not found {}".format(path))
+            raise IOError(f"File not found {path}")
 
         try:
             loaded = load_file(path)
@@ -112,6 +145,7 @@ class IDFXManga(Loadable):
             raise
         except Exception as e:
             self.exception("Failed to load manga file")
+
             raise IOError(e)
 
         if "user" not in loaded:
@@ -119,141 +153,174 @@ class IDFXManga(Loadable):
         if "mangas" not in loaded:
             raise ValueException("Mangas missing")
 
-        mangas = []
+        mangas: List[Manga] = []
 
         for mdict in loaded['mangas']:
-            m = Manga.from_dict(mdict)
-            """ :type : idefix.model.Manga """
+            m: Manga = Manga.from_dict(mdict)
+
             if m.updated:
                 m.updated = to_utc(m.updated)
             if m.created:
                 m.created = to_utc(m.created)
+
             mangas.append(m)
+
         return User.from_dict(loaded['user']), mangas
 
-    def save_manga_file(self, user, mangas, path=None, readable=False):
+    def save_manga_file(
+            self,
+            user: User,
+            mangas: List[Manga],
+            path: Optional[str] = None,
+            readable: bool = False,
+    ) -> None:
         """
         Save manga list to file
 
         :param user: User to save for
-        :type user: idefix.model.User
         :param mangas: List of mangas of user
-        :type mangas: list[idefix.model.Manga]
         :param path: Base path to save to or _read_path (default: None)
-        :type path: None | str | unicode
         :param readable: Format content to be human readable (default: False)
-        :type readable: bool
-        :rtype: None
         """
         if not path:
             path = self._read_path
         if not path:
             path = ""
+
         user_id = user.uuid
 
         if not user_id:
-            user_id = "{}_{}".format(user.lastname, user.firstname)
+            user_id = f"{user.lastname}_{user.firstname}"
 
-        temp_path = os.path.join(path, "idfx_manga_{}.json".format(user_id))
+        temp_path = os.path.join(path, f"idfx_manga_{user_id}.json")
 
         if os.path.exists(os.path.basename(temp_path)):
             path = temp_path
 
         save_file(path, {
             'user': user.to_dict(),
-            'mangas': [m.to_dict() for m in sorted(mangas, key=lambda a: a.name)]
+            'mangas': [
+                m.to_dict()
+                for m in sorted(
+                    mangas, key=lambda a: a.name if a.name is not None else ""
+                )
+            ]
         }, readable)
 
-    def create_manga(self, user, manga):
+    def create_manga(
+            self, user: User, manga: Manga
+    ) -> Union[List[Manga], int]:
         """
         New manga for user
 
         :param user: User to create for
-        :type user: idefix.model.User
         :param manga: Manga to add to user
-        :type manga: idefix.model.Manga
         :return: If multiple found, list of mangas to select or affected rows
         :rtype: list[idefix.model.Manga] | int
         :raises IDFXException: Failure
         :raises ValueException: Failure
         """
-        self.debug("Adding manga '{}' for user '{}'".format(manga, user))
+        self.debug(f"Adding manga '{manga}' for user '{user}'")
+
+        if self.dao is None:
+            raise IDFXException("No dao set")
+
         if not user or not user.uuid:
             raise ValueException("Invalid user")
         if not manga or not (manga.uuid or manga.name):
             raise ValueException("Invalid manga")
+
         if not manga.uuid:
             # Is unknown manga?
             mangas = self.dao.manga_get(Manga(name=manga.name))
+
             if not mangas:
                 # Create new manga
-                self.info("Creating new manga: {}".format(manga.name))
+                self.info(f"Creating new manga: {manga.name}")
+
                 if self.dao.manga_create(manga) == 0:
                     raise DAOException("Manga not created")
+
                 mangas = self.dao.manga_get(manga)
+
             if not mangas:
                 raise ValueException("Manga not found")
+
             if len(mangas) > 1:
                 return mangas
+
             manga.uuid = mangas[0].uuid
             manga.created = mangas[0].created
             manga.updated = mangas[0].updated
+
         res = self.dao.read_create(user, manga)
+
         if not res:
             raise DAOException("Manga read not created")
+
         self.dao.commit()
+
         return res
 
-    def _do_scrap(self, scraper):
+    def _do_scrap(  # noqa: C901
+            self, scraper: WebScraper
+    ) -> Optional[Dict[str, Any]]:
         """
         Perform thread-safe scrap step and update _upd
 
         :param scraper: Used scraper
-        :type scraper: WebScraper
-        :rtype: None
         """
         try:
             res = scraper.scrap()
         except WEBConnectException as e:
-            self.error("{}".format(e))
+            self.error(f"{e}")
+
             return None
         except Exception:
             self.exception("Failed to scrap")
-            return None #raise?
+
+            # raise?
+            return None
 
         res.scraped = scraper.shrink(res.scraped)
-        url = scraper.url
-        url = url.lstrip("https://")
-        url = url.lstrip("http://")
-        url = url.lstrip("www.")
+        url: str = scraper.url
+        url = url.removeprefix("https://")
+        url = url.removeprefix("http://")
+        url = url.removeprefix("www.")
         url = url.rstrip("/")
 
         if "chapter" not in res.scraped:
             self.error("Failed to retrieve mangas {}".format(url))
+
             return None
 
-        mangas = {}
+        mangas: Dict[str, Dict[str, Union[str, float, None]]] = {}
 
         for a in res.scraped['chapter']:
-            number = name = link = ""
+            name = link = ""
+            number: Optional[float] = None
 
             # if value == list -> assumes correct one at index 0
             for val in a:
                 if val == "number":
                     # Handle multiple chapters separatly
                     continue
+
                 if isinstance(a[val], list) and len(a[val]) > 0:
                     a[val] = a[val][0]
 
             if "number" in a:
                 numbers = a['number']
+
                 if not isinstance(numbers, list):
                     numbers = [numbers]
+
                 number = -1
 
                 for n in numbers:
                     try:
-                        num_candidate = float("{}".format(n).strip())
+                        num_candidate = float(f"{n}".strip())
+
                         if num_candidate > number:
                             number = num_candidate
                     except Exception:
@@ -261,16 +328,16 @@ class IDFXManga(Loadable):
                         pass
 
                 if number == -1:
-                    number = ""
+                    number = None
 
             if not number:
                 # No number -> skip
                 continue
 
             if "name" in a:
-                name = "{}".format(a['name']).strip()
+                name = f"{a['name']}".strip()
             if "link" in a:
-                link = urljoin(scraper.url, "{}".format(a['link']).strip())
+                link = urljoin(scraper.url, f"{a['link']}".strip())
 
             key = name.lower()
             mangas.setdefault(key, {
@@ -278,30 +345,25 @@ class IDFXManga(Loadable):
             })
             old = mangas[key]['chapter']
 
+            if not isinstance(old, float) or not isinstance(old, int):
+                continue
+
             if old < number:
                 mangas[key]['chapter'] = number
                 mangas[key]['url'] = link
+
         return mangas
 
-    def create_index(self):
+    def create_index(self) -> Optional[Dict[str, Manga]]:
+        """
+        Use scrapers to create index of available mangas
+
+        :return: Available mangas with chapter and location info
+        """
         if not self.scrapers:
             self.error("No scrapers found")
-            return None
 
-        for i, scraper in enumerate(self.scrapers):
-            if not hasattr(scraper, 'scrap'):
-                try:
-                    sett = {
-                        'path_prefix': self._prePath,
-                        'settings_file': scraper
-                    }
-                    scraper = WebScraper(sett)
-                    self.scrapers[i] = scraper
-                except Exception:
-                    self.exception(
-                        "Failed to load scrapper {}".format(scraper)
-                    )
-                    continue
+            return None
 
         if self.threading_mode == "pool" and self.pool:
             self.debug("pool")
@@ -329,8 +391,7 @@ class IDFXManga(Loadable):
                 for scraper in self.scrapers
             ]
 
-        index = {}
-        """ :type : dict[str | unicode, idefix.model.Manga] """
+        index: Dict[str, Manga] = {}
 
         for result in results:
             if not result:
@@ -339,7 +400,9 @@ class IDFXManga(Loadable):
 
             for key, value in result.items():
                 index.setdefault(
-                    key, Manga(name=value['name'], chapter=value['chapter'])
+                    key, Manga(
+                        name=value['name'], chapter=value['chapter']
+                    )
                 )
                 m = index[key]
                 m.updated = datetime.datetime.utcnow()
@@ -349,56 +412,95 @@ class IDFXManga(Loadable):
                 if not m.chapter or m.chapter < value['chapter']:
                     m.urls = [value['url']]
                     m.chapter = value['chapter']
+
         return index
 
-    def check(self, user_mangas, web_mangas):
+    def check(
+            self, user_mangas: List[Manga], web_mangas: Dict[str, Manga]
+    ) -> List[Manga]:
         """
         Check for user mangas if there is a new chapter available
 
         :param user_mangas: Mangas the user is reading
-        :type user_mangas: list[idefix.model.Manga]
         :param web_mangas: Mangas that are available on the web
-        :type web_mangas: dict[str | unicode, idefix.model.Manga]
         :return: Mangas with updates
-        :rtype: list[idefix.model.Manga]
         """
         res = []
 
         for m in user_mangas:
-            if m.name.lower() not in web_mangas:
-                # No update for this manga
+            if m.name is None or m.name.lower() not in web_mangas:
+                # No update for this manga or no manga info
                 continue
 
             w = web_mangas[m.name.lower()]
 
-            if m.chapter < w.chapter:
+            if m.chapter is not None \
+                    and w.chapter is not None \
+                    and m.chapter < w.chapter:
                 w.uuid = m.uuid
                 res.append(w)
+
         return res
 
-    def check_multiple(self, user_mangas, web_mangas):
+    def check_multiple(
+            self,
+            user_mangas: List[Tuple[
+                Manga, List[Tuple[str, int]]
+            ]],
+            web_mangas: Dict[str, Manga],
+    ) -> Dict[str, List[Manga]]:
         """
+        Check several users for manga updates simultaneous
 
         :param user_mangas: Manga -> all users and latest chapters read
-        :type user_mangas: list[(idefix.model.Manga, list[(str | unicode, int)]]
         :param web_mangas: Mangas that are available on the web
-        :type web_mangas: dict[str | unicode, idefix.model.Manga]
-        :return:
-        :rtype: dict[str | unicode, list[idefix.model.Manga]]
+        :return: Dict with user -> List of new mangas
         """
-        res = {}
+        res: Dict[str, List[Manga]] = {}
 
-        for manga, uuidChapter in user_mangas:
-            if manga.name.lower() not in web_mangas:
-                # No update for this manga
+        for manga, uuid_chapter in user_mangas:
+            if manga.name is None or manga.name.lower() not in web_mangas:
+                # No update for this manga or no manga info
                 continue
 
             w = web_mangas[manga.name.lower()]
             w.uuid = manga.uuid
 
-            for uuid, chapter in uuidChapter:
+            for uuid, chapter in uuid_chapter:
                 if uuid not in res:
                     res[uuid] = []
-                if chapter < w.chapter:
+
+                if w.chapter is not None and chapter < w.chapter:
                     res[uuid].append(w)
+
         return res
+
+    def start(self, blocking: bool = False) -> None:
+        """
+        Start interface
+
+        :param blocking: Run start until done
+        """
+        if self.dao:
+            try:
+                self.dao.start(False)
+            except Exception:
+                self.exception("Failed to start dao")
+
+                raise StartException("Dao start failed")
+        else:
+            self.warning("No dao to start")
+
+        super().start(blocking)
+
+    def stop(self) -> None:
+        """ Stop interface """
+        super().stop()
+
+        if self.dao:
+            try:
+                self.dao.stop()
+            except Exception:
+                self.exception("Failed to stop dao")
+        else:
+            self.warning("No dao to stop")

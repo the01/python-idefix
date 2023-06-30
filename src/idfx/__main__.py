@@ -2,7 +2,7 @@
 
 __author__ = "d01"
 __email__ = "jungflor@gmail.com"
-__copyright__ = "Copyright (C) 2021, Florian JUNG"
+__copyright__ = "Copyright (C) 2021-23, Florian JUNG"
 __license__ = "MIT"
 __version__ = "0.1.0"
 __date__ = "2021-05-06"

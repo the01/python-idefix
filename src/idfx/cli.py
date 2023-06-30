@@ -2,16 +2,17 @@
 
 __author__ = "d01"
 __email__ = "jungflor@gmail.com"
-__copyright__ = "Copyright (C) 2017-21, Florian JUNG"
+__copyright__ = "Copyright (C) 2017-23, Florian JUNG"
 __license__ = "MIT"
 __version__ = "0.1.0"
 __date__ = "2021-05-06"
 # Created: 2017-12-01 21:15
 
-import logging
-import logging.config
 import argparse
 import datetime
+import logging
+import logging.config
+from typing import List
 
 from flotils import get_logger
 from flotils.logable import default_logging_config
@@ -25,12 +26,11 @@ logger = get_logger()
 logging.captureWarnings(True)
 
 
-def setup_parser():
+def setup_parser() -> argparse.ArgumentParser:
     """
     Create and init argument parser
 
     :return: Argument parser
-    :rtype: argparse.ArgumentParser
     """
     parser = argparse.ArgumentParser(prog="idefix")
     parser.add_argument(
@@ -80,13 +80,11 @@ def setup_parser():
     return parser
 
 
-def format_mangas(mangas):
+def format_mangas(mangas: List[Manga]) -> str:
     """
 
-    :param mangas:
-    :type mangas: list[idefix.model.Manga]
-    :return:
-    :rtype: str | unicode
+    :param mangas: Mangas to format
+    :return: Formatted Text
     """
     if not mangas:
         return ""
@@ -95,23 +93,28 @@ def format_mangas(mangas):
 
     for m in mangas:
         url_parts = ""
+
         if m.urls:
             url_parts = ": " + ",".join([urlparse(u).netloc for u in m.urls])
+
         int_chap = m.chapter
+
         if int_chap:
             try:
-                int_chap = int(m.chapter)
-            except:
+                int_chap = int(int_chap)
+            except Exception:
                 int_chap = m.chapter
+
         if int_chap != m.chapter:
             int_chap = m.chapter
-        res.append("{} ({}){}".format(
-            m.name, int_chap, url_parts
-        ))
+
+        res.append(f"{m.name} ({int_chap}){url_parts}")
+
     return "\n".join(res)
 
 
-def main():
+def main() -> int:  # noqa: C901
+    """ Run main code for cli """
     logging.config.dictConfig(default_logging_config)
     logging.getLogger().setLevel(logging.INFO)
 
@@ -120,6 +123,7 @@ def main():
 
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
+
     instance = IDFXManga({
         'settings_file': args.settings,
         'path_prefix': args.pre_path
@@ -130,6 +134,12 @@ def main():
         user, mangas = instance.load_manga_file(path=args.manga_file)
     except Exception:
         logger.exception("Failed to load manga file")
+
+        return quit(1)
+
+    if instance.dao is None:
+        logger.error("A dao is required to run")
+
         return quit(1)
 
     new = None
@@ -137,10 +147,17 @@ def main():
 
     if args.add:
         n = Manga(name=args.add)
-        found = [m for m in mangas if n.name.lower() == m.name.lower()]
+        found = []
+
+        if n.name is not None:
+            found = [
+                m
+                for m in mangas
+                if m.name is not None and n.name.lower() == m.name.lower()
+            ]
 
         if found:
-            logger.info("Manga already added ({})".format(found[0].name))
+            logger.info(f"Manga already added ({found[0].name})")
         else:
             n.updated = datetime.datetime.utcnow()
             n.created = datetime.datetime.utcnow()
@@ -148,8 +165,12 @@ def main():
             dirty = True
 
     if args.check:
-        new = instance.check(mangas, instance.create_index())
-        # logger.debug(new)
+        temp_index = instance.create_index()
+
+        if temp_index is not None:
+            new = instance.check(
+                mangas, temp_index
+            )
 
         if new:
             logger.info("\n" + format_mangas(new))
@@ -158,20 +179,35 @@ def main():
 
     if args.read is not None:
         if new is None:
-            new = instance.check(mangas, instance.create_index())
+            temp_index = instance.create_index()
+
+            if temp_index is not None:
+                new = instance.check(
+                    mangas, temp_index
+                )
 
         if new:
             r = args.read.lower()
 
             for m in mangas:
+                if m.name is None:
+                    # Will not process manga without name
+                    continue
+
                 if r and not m.name.lower().startswith(r):
                     continue
 
                 for n in new:
-                    if not((n.name or m.name)
-                           and n.name.lower() == m.name.lower()):
-                        if not((n.uuid or m.uuid) and n.uuid == m.uuid):
-                            continue
+                    if n.name is None:
+                        # Will not process manga without name
+                        continue
+
+                    if not (
+                            (n.name or m.name) and n.name.lower() == m.name.lower()
+                    ) and not (
+                            (n.uuid or m.uuid) and n.uuid == m.uuid
+                    ):
+                        continue
 
                     m.chapter = n.chapter
                     m.updated = n.updated
@@ -192,12 +228,26 @@ def main():
             instance.dao.start(False)
 
         db_mangas = instance.dao.read_get(user)
-        db_dict = {db.name.lower(): db for db in db_mangas}
-        file_dict ={m.name.lower(): m for m in mangas}
+        db_dict = {
+            db.name.lower(): db
+            for db in db_mangas
+            if db.name is not None
+        }
+        file_dict = {
+            m.name.lower(): m
+            for m in mangas
+            if m.name is not None
+        }
         db_set = set(db_dict.keys())
         file_set = set(file_dict.keys())
-        missing_db = [file_dict[key] for key in (file_set - db_set)]
-        missing_file = [db_dict[key] for key in (db_set - file_set)]
+        missing_db = [
+            file_dict[key]
+            for key in (file_set - db_set)
+        ]
+        missing_file = [
+            db_dict[key]
+            for key in (db_set - file_set)
+        ]
         upd_db = []
 
         for key in (db_set & file_set):
@@ -205,42 +255,45 @@ def main():
             m = file_dict[key]
 
             if not m.uuid:
-                logger.debug("NoUUID {} -> {}".format(d.uuid, m.uuid))
+                logger.debug(f"NoUUID {d.uuid} -> {m.uuid}")
                 m.uuid = d.uuid
                 dirty = True
             if not m.created:
-                logger.debug("NoCtd {} -> {}".format(d.created, m.created))
+                logger.debug(f"NoCtd {d.created} -> {m.created}")
                 m.created = d.created
                 dirty = True
             if not m.updated:
-                logger.debug("NoUpd {} -> {}".format(d.updated, m.updated))
+                logger.debug(f"NoUpd {d.updated} -> {m.updated}")
                 m.updated = d.updated
                 dirty = True
             if not m.name:
-                logger.debug("NoName {} -> {}".format(d.name, m.name))
+                logger.debug(f"NoName {d.name} -> {m.name}")
                 m.name = d.name
                 dirty = True
-            if d.updated < m.updated:
+            if d.updated is not None and m.updated is not None \
+                    and d.updated < m.updated:
                 # m newer
-                logger.debug("UpdD {} -> {}".format(m, d))
+                logger.debug(f"UpdD {m} -> {d}")
                 d.name = m.name
                 d.chapter = m.chapter
                 d.updated = m.updated
                 upd_db.append(d)
-            elif d.updated > m.updated:
+            elif d.updated is not None and m.updated is not None \
+                    and d.updated > m.updated:
                 # d newer
-                logger.debug("UpdM {} -> {}".format(d, m))
+                logger.debug(f"UpdM {d} -> {m}")
                 m.name = d.name
                 m.chapter = d.chapter
                 m.updated = d.updated
                 dirty = True
             elif d.chapter != m.chapter:
-                if m.chapter is None or m.chapter < d.chapter:
-                    logger.debug("ChapM {} -> {}".format(d.chapter, m.chapter))
+                if m.chapter is None \
+                        or (d.chapter is not None and m.chapter < d.chapter):
+                    logger.debug(f"ChapM {d.chapter} -> {m.chapter}")
                     m.chapter = d.chapter
                     dirty = True
                 elif d.chapter is None or d.chapter < m.chapter:
-                    logger.debug("ChapD {} -> {}".format(m.chapter, d.chapter))
+                    logger.debug(f"ChapD {m.chapter} -> {d.chapter}")
                     d.chapter = m.chapter
                     upd_db.append(d)
 
@@ -271,3 +324,5 @@ def main():
     if dirty:
         logger.debug("Dirty")
         instance.save_manga_file(user, mangas, readable=True)
+
+    return 0

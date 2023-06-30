@@ -3,19 +3,15 @@
 
 __author__ = "d01 <Florian Jung>"
 __email__ = "jungflor@gmail.com"
-__copyright__ = "Copyright (C) 2015-21, Florian JUNG"
+__copyright__ = "Copyright (C) 2015-23, Florian JUNG"
 __license__ = "MIT"
-__version__ = "0.3.0"
-__date__ = "2021-05-06"
+__version__ = "0.4.0"
+__date__ = "2023-06-18"
 # Created: ?
 
-try:
-    from setuptools import setup
-except ImportError:
-    from distutils.core import setup
+from setuptools import find_packages, setup
 import sys
 import os
-import re
 
 
 if sys.argv[-1] == "build":
@@ -26,18 +22,17 @@ def get_version():
     """
     Parse the version information from the init file
     """
-    version_file = os.path.join("idfx", "__version__.py")
-    initfile_lines = open(version_file, "rt").readlines()
-    version_reg = r"^__version__ = ['\"]([^'\"]*)['\"]"
+    # version_file = os.path.join("src/idfx", "__version__.py")
+    # initfile_lines = open(version_file, "rt").readlines()
+    # version_reg = r"^__version__ = ['\"]([^'\"]*)['\"]"
 
-    for line in initfile_lines:
-        mo = re.search(version_reg, line, re.M)
-        if mo:
-            return mo.group(1)
+    here = os.path.abspath(os.path.dirname(__file__))
+    about = {}
 
-    raise RuntimeError(
-        "Unable to find version string in {}".format(version_file)
-    )
+    with open(os.path.join(here, "src/idfx", "__version__.py")) as f:
+        exec(f.read(), about)
+
+    return about['__version__']
 
 
 def get_file(path):
@@ -57,6 +52,7 @@ def split_external_requirements(requirements):
             external.append(req.lstrip("-e git+"))
         else:
             pypi.append(req)
+
     return pypi, external
 
 
@@ -81,10 +77,14 @@ setup(
     author="the01",
     author_email="jungflor@gmail.com",
     url="https://github.com/the01/python-idefix",
-    packages=[
-        "idfx",
-        "idfx.dao"
-    ],
+    packages=find_packages("src"),
+    package_dir={
+        '': "src",
+    },
+    # packages=[
+    #     "idfx",
+    #     "idfx.dao"
+    # ],
     install_requires=pypi,
     dependency_links=external,
     entry_points={
@@ -100,9 +100,10 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Natural Language :: English",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
     ]
 )
