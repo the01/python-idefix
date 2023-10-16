@@ -396,6 +396,7 @@ class SqlConnector(Loadable, StartStopable):
                     manga.name, manga.latest_chapter
                 )
             )
+            self.commit()
 
             return affected
         except DAOException as e:
@@ -437,6 +438,7 @@ class SqlConnector(Loadable, StartStopable):
                 query + " WHERE UuidFromBin(uuid)=%s",
                 args + (manga.uuid,)
             )
+            self.commit()
 
             return affected
         except DAOException as e:
@@ -464,6 +466,7 @@ class SqlConnector(Loadable, StartStopable):
                 "DELETE FROM mangas WHERE UuidFromBin(uuid)=%s",
                 (manga.uuid,)
             )
+            self.commit()
 
             return affected
         except DAOException:
@@ -562,6 +565,7 @@ class SqlConnector(Loadable, StartStopable):
                     user.firstname, user.lastname, user.role
                 )
             )
+            self.commit()
 
             return affected
         except DAOException as e:
@@ -602,6 +606,7 @@ class SqlConnector(Loadable, StartStopable):
                 query + " WHERE UuidFromBin(uuid)=%s",
                 args + (user.uuid,)
             )
+            self.commit()
 
             return affected
         except DAOException as e:
@@ -629,6 +634,7 @@ class SqlConnector(Loadable, StartStopable):
                 "DELETE FROM users WHERE UuidFromBin(uuid)=%s",
                 (user.uuid,)
             )
+            self.commit()
 
             return affected
         except DAOException:
@@ -736,6 +742,7 @@ class SqlConnector(Loadable, StartStopable):
                 "(UuidToBin(%s),UuidToBin(%s),%s,%s,%s);",
                 (user.uuid, manga.uuid, manga.created, manga.updated, chapter)
             )
+            self.commit()
 
             return affected
         except DAOException as e:
@@ -770,6 +777,7 @@ class SqlConnector(Loadable, StartStopable):
                 "UuidFromBin(user_uuid)=%s AND UuidFromBin(manga_uuid)=%s",
                 (now, manga.chapter, user.uuid, manga.uuid)
             )
+            self.commit()
 
             return affected
         except DAOException as e:
@@ -802,6 +810,7 @@ class SqlConnector(Loadable, StartStopable):
                 "UuidFromBin(user_uuid)=%s AND UuidFromBin(manga_uuid)=%s",
                 (user.uuid, manga.uuid)
             )
+            self.commit()
 
             return affected
         except DAOException:
