@@ -8,7 +8,7 @@ include:
 
 cache:
   paths:
-    - ".cache/pip"
+    - "$CI_PROJECT_DIR/.cache/pip"
   key: "$CI_PROJECT_ID"
 
 variables:
@@ -106,7 +106,7 @@ mypy:
   script:
     - PIP_INDEX_URL=http://pypi.lan/root/$PYPI_INDEX tox -e test
     - sed -i -E "s|<source>.+</source>|<source>src</source>|g" reports/coverage.xml
-    - sed -i -E 's|filename=".*/(alexander_fw/[a-zA-Z0-9\._/-]*)"| filename="\1"|g' reports/coverage.xml
+    - sed -i -E 's|filename=".*/(idfx/[a-zA-Z0-9\._/-]*)"| filename="\1"|g' reports/coverage.xml
   artifacts:
     reports:
       junit: reports/pytest.xml
@@ -169,6 +169,14 @@ mypy:
     - master
     - tags
 
+pytest:3.12:
+  extends:
+    - .pytest
+  image: python:3.12
+  only:
+    - master
+    - tags
+
 
 # With dot
 .deploy:
@@ -200,7 +208,7 @@ deploy:pypi:prod:
     #  when: never
     #- changes:
     #    - /src/young_reader/__version__.py
-    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.?[0-9]*\.?[0-9]*$/'
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.?[0-9]*\.?[0-9]*\.?[0-9]*$/'
 
 # Deploy to rc on develop branch
 deploy:pypi:rc:
