@@ -110,7 +110,9 @@ mypy:
   artifacts:
     reports:
       junit: reports/pytest.xml
-      cobertura: reports/coverage.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: reports/coverage.xml
 
 .pytest:pytest:
   extends:
@@ -169,7 +171,7 @@ mypy:
     - master
     - tags
 
-pytest:3.12:
+.pytest:3.12:
   extends:
     - .pytest
   image: python:3.12
