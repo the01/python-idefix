@@ -114,6 +114,7 @@ mypy:
         coverage_format: cobertura
         path: reports/coverage.xml
 
+# TODO: No dots!
 .pytest:pytest:
   extends:
     - .pytest

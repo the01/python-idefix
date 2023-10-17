@@ -917,7 +917,7 @@ class SqlConnector(Loadable, StartStopable):
                         ))
 
                     mangas[-1][1].append(
-                        (t[3], float(t[2]))
+                        (t[3].decode("utf-8"), float(t[2]))
                     )
         except DAOException:
             raise
