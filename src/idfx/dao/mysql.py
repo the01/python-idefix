@@ -64,7 +64,8 @@ class SqlConnector(Loadable, StartStopable):
                 user=self._user,
                 passwd=self._pw,
                 db=db,
-                charset=encoding
+                charset=encoding,
+                # Autocommit?
             )
             cur = con.cursor()
             cur.execute("SET time_zone= '+00:00'")
@@ -112,15 +113,21 @@ class SqlConnector(Loadable, StartStopable):
 
     def switch_database(self, db: str) -> None:
         """
-        Switch to database
+        Switch to database, ensure connection/cursor
 
         :param db: Database to switch to
         :raises DAOException: Failed to connect
         """
         if db is None:
             db = self._default_db
-        if db == self.database:
+
+        if \
+                db == self.database and \
+                self.connection is not None and \
+                self.cursor is not None:
+            # Ready
             return
+
         if self.database is None:
             raise DAOException("No database set")
 
@@ -134,6 +141,9 @@ class SqlConnector(Loadable, StartStopable):
             self.connection, self.cursor = self._dbs[db]
             self.database = db
         else:
+            self._connect(db)
+
+        if self.connection is None or self.cursor is None:
             self._connect(db)
 
     def execute(
@@ -157,6 +167,14 @@ class SqlConnector(Loadable, StartStopable):
 
         if not self.cursor:
             raise DAOException("No cursor")
+        if not self.connection:
+            raise DAOException("No connection")
+
+        if not self.connection.open:
+            try:
+                self.connection.ping(reconnect=True)
+            except Exception as e:
+                raise DAOException(e)
 
         try:
             if args:
@@ -180,6 +198,14 @@ class SqlConnector(Loadable, StartStopable):
 
         if not self.cursor:
             raise DAOException("No cursor")
+        if not self.connection:
+            raise DAOException("No connection")
+
+        if not self.connection.open:
+            try:
+                self.connection.ping(reconnect=True)
+            except Exception as e:
+                raise DAOException(e)
 
         try:
             return self.cursor.fetchall()
@@ -200,6 +226,12 @@ class SqlConnector(Loadable, StartStopable):
         if not self.connection:
             raise DAOException("No connection")
 
+        if not self.connection.open:
+            try:
+                self.connection.ping(reconnect=True)
+            except Exception as e:
+                raise DAOException(e)
+
         try:
             return self.connection.commit()
         except Exception as e:
@@ -218,6 +250,12 @@ class SqlConnector(Loadable, StartStopable):
 
         if not self.connection:
             raise DAOException("No connection")
+
+        if not self.connection.open:
+            try:
+                self.connection.ping(reconnect=True)
+            except Exception as e:
+                raise DAOException(e)
 
         try:
             return self.connection.rollback()
