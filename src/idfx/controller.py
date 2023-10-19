@@ -345,7 +345,7 @@ class IDFXManga(Loadable, StartStopable):
             })
             old = mangas[key]['chapter']
 
-            if not isinstance(old, float) or not isinstance(old, int):
+            if not isinstance(old, float) and not isinstance(old, int):
                 continue
 
             if old < number:
